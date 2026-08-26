@@ -1,0 +1,175 @@
+{
+  "id": "14a886c9-3d37-44a9-a5c8-b20f92d990bf",
+  "name": "WF-09 Daily Operations Brief",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "WF-09 Daily Operations Brief",
+        "width": 300,
+        "height": 120
+      },
+      "id": "5d648892-6656-4c69-b623-33f67d5305b4",
+      "name": "WF-09 Daily Operations Brief",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -200,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 7 * * *"
+            }
+          ]
+        }
+      },
+      "id": "cabb4fec-204d-4c0a-8e72-5411b88ad561",
+      "name": "Daily 07:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  (SELECT COUNT(*) FROM leads WHERE created_at >= CURRENT_DATE - INTERVAL '1 day' AND created_at < CURRENT_DATE) AS new_leads,\n  (SELECT COUNT(*) FROM leads WHERE qualification_rating = 'VERY_HIGH' AND created_at >= CURRENT_DATE - INTERVAL '1 day') AS very_high_leads,\n  (SELECT COUNT(*) FROM leads WHERE status = 'MANUAL_REVIEW') AS manual_review_leads,\n  (SELECT COUNT(*) FROM bookings WHERE start_at::date = CURRENT_DATE AND status IN ('BOOKED','CONFIRMED')) AS todays_bookings,\n  (SELECT COUNT(*) FROM bookings WHERE start_at::date = CURRENT_DATE + 1 AND status IN ('BOOKED','CONFIRMED')) AS tomorrows_bookings,\n  (SELECT COUNT(*) FROM follow_ups WHERE status = 'SCHEDULED' AND scheduled_for <= NOW()) AS follow_ups_due,\n  (SELECT COUNT(*) FROM jobs WHERE completed_at::date = CURRENT_DATE - 1) AS jobs_completed_yesterday,\n  (SELECT COUNT(*) FROM workflow_errors WHERE status IN ('OPEN','MANUAL_ACTION_REQUIRED')) AS workflow_errors_open;",
+        "options": {}
+      },
+      "id": "94868ba5-9784-4718-a2e1-02a7f5749585",
+      "name": "Aggregate Daily Metrics",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        300,
+        200
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "LOCALFLOW_POSTGRES",
+          "name": "LocalFlow PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst m = $input.first().json;\nconst body = `LOCALFLOW \u2014 DAILY OPERATIONS BRIEF\\n\\nNew leads (24h): ${m.new_leads}\\nVery high priority: ${m.very_high_leads}\\nManual review queue: ${m.manual_review_leads}\\nToday's bookings: ${m.todays_bookings}\\nTomorrow's bookings: ${m.tomorrows_bookings}\\nFollow-ups due: ${m.follow_ups_due}\\nJobs completed yesterday: ${m.jobs_completed_yesterday}\\nOpen workflow errors: ${m.workflow_errors_open}\\n`;\nreturn [{ json: { ...m, report_body: body } }];\n"
+      },
+      "id": "903a39d8-aa23-453e-b1a5-c0a421ccc37a",
+      "name": "Format Daily Brief",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        600,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "office@northamptonhomeservices.demo",
+        "toEmail": "owner@northamptonhomeservices.demo",
+        "subject": "LocalFlow Daily Operations Brief",
+        "emailFormat": "text",
+        "text": "={{ $json.report_body }}",
+        "options": {}
+      },
+      "id": "6ece4af3-43b1-485c-9d97-14ea678b7b55",
+      "name": "Send Daily Brief",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        900,
+        200
+      ],
+      "credentials": {
+        "smtp": {
+          "id": "LOCALFLOW_MAILPIT",
+          "name": "LocalFlow Mailpit SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO reporting_snapshots (report_type, period_start, period_end, metrics_json)\nVALUES ('DAILY_BRIEF', CURRENT_DATE - INTERVAL '1 day', CURRENT_DATE, '{{ JSON.stringify($json).replace(/'/g, \"''\") }}'::jsonb);",
+        "options": {}
+      },
+      "id": "5d77bc3b-7662-48af-b942-89f0b4a6eb18",
+      "name": "Store Daily Snapshot",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1200,
+        200
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "LOCALFLOW_POSTGRES",
+          "name": "LocalFlow PostgreSQL"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Daily 07:00": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Daily Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Daily Metrics": {
+      "main": [
+        [
+          {
+            "node": "Format Daily Brief",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Daily Brief": {
+      "main": [
+        [
+          {
+            "node": "Send Daily Brief",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Daily Brief": {
+      "main": [
+        [
+          {
+            "node": "Store Daily Snapshot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "0646a8e8-9dcc-4b3f-a09b-87944fd9e623",
+  "meta": {
+    "instanceId": "localflow-case-study"
+  },
+  "tags": []
+}

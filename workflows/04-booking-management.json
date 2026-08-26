@@ -1,0 +1,400 @@
+{
+  "id": "43974f60-4cbc-4f53-ac9e-ce40e7d970a2",
+  "name": "WF-04 Booking Management",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "WF-04 Booking Management\nConflict detection + confirmation",
+        "width": 300,
+        "height": 120
+      },
+      "id": "b12b86f9-d854-4e68-99ee-52b3274e7af7",
+      "name": "WF-04 Booking Management",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -200,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "booking/create",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "7db4ce36-8627-497f-8be2-118655802370",
+      "name": "Booking Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        200
+      ],
+      "webhookId": "77c2a4a3-5933-4cfc-ad5e-9c4ac672267e"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst b = $input.first().json.body || $input.first().json;\nif (!b.lead_id || !b.start_at || !b.end_at) {\n  return [{ json: { valid: false, error: 'lead_id, start_at, end_at required', http_status: 400 } }];\n}\nreturn [{ json: { valid: true, ...b } }];\n"
+      },
+      "id": "a240fc8f-2862-4f13-b40f-e1f2051bd476",
+      "name": "Validate Booking Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        300,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "fbb93c8b-6e80-410d-b24a-f38177ea230f",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "5cd77b9c-f3a0-415f-bb46-deeefd23ec42",
+      "name": "Booking Valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        600,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": "={{ $json.http_status || 200 }}"
+        }
+      },
+      "id": "d87a6865-8e14-4431-bb9a-e66e03cbefc1",
+      "name": "Return Booking Validation Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        900,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT COUNT(*)::int AS conflict_count FROM bookings\nWHERE status IN ('BOOKED','CONFIRMED','IN_PROGRESS')\n  AND technician_id = COALESCE({{ $json.technician_id || 'NULL' }}, technician_id)\n  AND start_at < '{{ $json.end_at }}'::timestamptz\n  AND end_at > '{{ $json.start_at }}'::timestamptz;",
+        "options": {}
+      },
+      "id": "5d7d8229-f7bb-4e7c-826b-ed2a24080fd0",
+      "name": "Check Booking Conflicts",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        900,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "LOCALFLOW_POSTGRES",
+          "name": "LocalFlow PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "1f4d4e2b-2aa7-4c3f-b32b-f6161041c029",
+              "leftValue": "={{ $json.conflict_count > 0 }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "1c39b81a-4862-4732-8d97-e528463a6b4a",
+      "name": "Has Conflict?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1200,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: false, error: 'BOOKING_CONFLICT', message: 'Requested slot unavailable', http_status: 409 } }}",
+        "options": {
+          "responseCode": "={{ $json.http_status || 200 }}"
+        }
+      },
+      "id": "39687162-7104-4d3f-ac4c-9ddd32f42cf2",
+      "name": "Return Conflict Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1500,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH nr AS (SELECT generate_booking_reference() AS ref),\nlead_row AS (SELECT customer_id, service_category FROM leads WHERE id = {{ $('Validate Booking Request').item.json.lead_id }})\nINSERT INTO bookings (booking_reference, lead_id, customer_id, start_at, end_at, service_type, technician_id, status)\nSELECT nr.ref, {{ $('Validate Booking Request').item.json.lead_id }}, lead_row.customer_id,\n  '{{ $('Validate Booking Request').item.json.start_at }}'::timestamptz,\n  '{{ $('Validate Booking Request').item.json.end_at }}'::timestamptz,\n  lead_row.service_category,\n  {{ $('Validate Booking Request').item.json.technician_id || 'NULL' }},\n  'BOOKED'::booking_status\nFROM nr, lead_row\nRETURNING *;",
+        "options": {}
+      },
+      "id": "a2457e11-4ba7-4c64-9208-66ea61b1562e",
+      "name": "Create Booking Record",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1500,
+        400
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "LOCALFLOW_POSTGRES",
+          "name": "LocalFlow PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads SET status = 'BOOKED'::lead_status, updated_at = NOW()\nWHERE id = {{ $json.lead_id }} RETURNING id;",
+        "options": {}
+      },
+      "id": "784ef9a7-02ed-4c00-bbe2-8d07d2b4022c",
+      "name": "Update Lead Status Booked",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1800,
+        400
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "LOCALFLOW_POSTGRES",
+          "name": "LocalFlow PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "office@northamptonhomeservices.demo",
+        "toEmail": "={{ $('Validate Booking Request').item.json.customer_email || 'demo@example.com' }}",
+        "subject": "={{ 'Booking confirmed \u2014 ' + $('Create Booking Record').item.json.booking_reference }}",
+        "emailFormat": "text",
+        "text": "={{ 'Your appointment is confirmed.\\n\\nReference: ' + $('Create Booking Record').item.json.booking_reference + '\\nDate: ' + $('Create Booking Record').item.json.start_at + '\\n\\nPlease ensure access is available. To reschedule, reply to this email.\\n\\nNorthampton Home Services Ltd' }}",
+        "options": {}
+      },
+      "id": "47323b3b-351b-4841-b0a0-cde30171029e",
+      "name": "Send Booking Confirmation",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        2100,
+        400
+      ],
+      "credentials": {
+        "smtp": {
+          "id": "LOCALFLOW_MAILPIT",
+          "name": "LocalFlow Mailpit SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO communications (customer_id, lead_id, booking_id, channel, communication_type, recipient, subject, status, sent_at, idempotency_key)\nVALUES ({{ $('Create Booking Record').item.json.customer_id }}, {{ $('Create Booking Record').item.json.lead_id }},\n  {{ $('Create Booking Record').item.json.id }}, 'EMAIL', 'BOOKING_CONFIRMATION',\n  '{{ $('Validate Booking Request').item.json.customer_email }}', 'Booking confirmed', 'SENT', NOW(),\n  'book-confirm-' || {{ $('Create Booking Record').item.json.id }})\nON CONFLICT (idempotency_key) DO NOTHING;",
+        "options": {}
+      },
+      "id": "cfefd656-7707-4f2a-a1c1-cb45fca0a9d9",
+      "name": "Record Booking Communication",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        2400,
+        400
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "LOCALFLOW_POSTGRES",
+          "name": "LocalFlow PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: true, booking_reference: $('Create Booking Record').item.json.booking_reference } }}",
+        "options": {
+          "responseCode": "={{ $json.http_status || 200 }}"
+        }
+      },
+      "id": "fc1672aa-98d5-4117-9035-cf0414ff1bd3",
+      "name": "Return Booking Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2700,
+        400
+      ]
+    }
+  ],
+  "connections": {
+    "Booking Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Booking Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Booking Request": {
+      "main": [
+        [
+          {
+            "node": "Booking Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Booking Valid?": {
+      "main": [
+        [
+          {
+            "node": "Check Booking Conflicts",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return Booking Validation Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Booking Conflicts": {
+      "main": [
+        [
+          {
+            "node": "Has Conflict?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Conflict?": {
+      "main": [
+        [
+          {
+            "node": "Return Conflict Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create Booking Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Booking Record": {
+      "main": [
+        [
+          {
+            "node": "Update Lead Status Booked",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Lead Status Booked": {
+      "main": [
+        [
+          {
+            "node": "Send Booking Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Booking Confirmation": {
+      "main": [
+        [
+          {
+            "node": "Record Booking Communication",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Record Booking Communication": {
+      "main": [
+        [
+          {
+            "node": "Return Booking Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "93f16b04-0d19-4d67-8ece-292ed700fafe",
+  "meta": {
+    "instanceId": "localflow-case-study"
+  },
+  "tags": []
+}

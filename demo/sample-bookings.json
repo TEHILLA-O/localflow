@@ -1,0 +1,5 @@
+[
+  {"booking_reference": "BOOK-2026-000001", "service_type": "PLUMBING", "status": "BOOKED"},
+  {"booking_reference": "BOOK-2026-000002", "service_type": "ELECTRICAL", "status": "CONFIRMED"},
+  {"booking_reference": "BOOK-2026-000003", "service_type": "HEATING", "status": "COMPLETED"}
+]

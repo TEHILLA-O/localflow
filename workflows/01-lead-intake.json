@@ -1,0 +1,744 @@
+{
+  "id": "80b383f2-470c-43fe-8d0d-f6069000259c",
+  "name": "WF-01 Lead Intake",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "1. Input Validation\n2. Customer Matching\n3. Lead Creation\n4. Orchestration",
+        "width": 350,
+        "height": 200
+      },
+      "id": "33d82dc8-9955-4574-a193-87913248b57e",
+      "name": "1. Input Validation",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -400,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "formTitle": "Northampton Home Services \u2014 Service Enquiry",
+        "formDescription": "Request plumbing, electrical, heating or property maintenance in Northampton.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "First Name",
+              "fieldType": "text",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Last Name",
+              "fieldType": "text",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Email",
+              "fieldType": "email",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Phone",
+              "fieldType": "text",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Postcode",
+              "fieldType": "text",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Service Required",
+              "fieldType": "dropdown",
+              "requiredField": true,
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "PLUMBING"
+                  },
+                  {
+                    "option": "ELECTRICAL"
+                  },
+                  {
+                    "option": "HEATING"
+                  },
+                  {
+                    "option": "PROPERTY_MAINTENANCE"
+                  }
+                ]
+              }
+            },
+            {
+              "fieldLabel": "Description",
+              "fieldType": "textarea",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Preferred Date",
+              "fieldType": "date"
+            },
+            {
+              "fieldLabel": "Preferred Time",
+              "fieldType": "text"
+            },
+            {
+              "fieldLabel": "Urgency",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "NORMAL"
+                  },
+                  {
+                    "option": "URGENT"
+                  },
+                  {
+                    "option": "EMERGENCY"
+                  }
+                ]
+              }
+            },
+            {
+              "fieldLabel": "Consent To Contact",
+              "fieldType": "checkbox",
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "eb024020-dfd9-413f-86dc-7cc66c7cd298",
+      "name": "Customer Enquiry Form",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "64dfd324-2fd8-437b-8761-4761063b0c4c"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead-intake",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "7681b82a-93ff-4561-8299-5c842879121d",
+      "name": "Lead Intake Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        200
+      ],
+      "webhookId": "db623937-bffa-43d0-9623-38cdaf4fb439"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst input = $input.first().json.body || $input.first().json;\nconst errors = [];\n\nfunction normEmail(e) {\n  if (!e || typeof e !== 'string') return null;\n  const v = e.trim().toLowerCase();\n  return /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(v) ? v : null;\n}\n\nfunction normPhone(p) {\n  if (!p) return null;\n  let d = String(p).replace(/[^\\d+]/g, '');\n  if (d.startsWith('0044')) d = '+44' + d.slice(4);\n  if (d.startsWith('44') && !d.startsWith('+')) d = '+' + d;\n  if (d.startsWith('+44')) d = '0' + d.slice(3);\n  if (!/^07\\d{9}$/.test(d)) return null;\n  return d.replace(/(\\d{5})(\\d{6})/, '$1 $2');\n}\n\nfunction normPostcode(pc) {\n  if (!pc) return { valid: false, normalized: null, district: null };\n  const raw = String(pc).toUpperCase().replace(/\\s+/g, '');\n  const m = raw.match(/^([A-Z]{1,2}\\d[A-Z\\d]?)(\\d[A-Z]{2})$/);\n  if (!m) return { valid: false, normalized: null, district: null };\n  const normalized = `${m[1]} ${m[2]}`;\n  const district = m[1].match(/^[A-Z]{1,2}\\d+/)?.[0] || null;\n  return { valid: true, normalized, district };\n}\n\nconst email = normEmail(input.email || input.Email);\nconst phone = normPhone(input.phone || input.Phone);\nconst postcodeInfo = normPostcode(input.postcode || input.Postcode);\n\n['first_name','last_name','description','service_required'].forEach(f => {\n  const alt = f.replace('_',' ').replace(/\\b\\w/g,c=>c.toUpperCase()).replace(' ',' ');\n});\nconst firstName = (input.first_name || input['First Name'] || '').trim();\nconst lastName = (input.last_name || input['Last Name'] || '').trim();\nconst description = (input.description || input.Description || '').trim();\nconst service = (input.service_required || input['Service Required'] || '').trim().toUpperCase();\nconst consent = Boolean(input.consent_to_contact ?? input['Consent To Contact']);\n\nif (!firstName) errors.push('first_name required');\nif (!lastName) errors.push('last_name required');\nif (!email) errors.push('valid email required');\nif (!phone) errors.push('valid UK mobile required');\nif (!postcodeInfo.valid) errors.push('valid UK postcode required');\nif (!description) errors.push('description required');\nif (!service) errors.push('service_required required');\nif (!consent) errors.push('consent_to_contact required');\n\nconst emergencyKw = ['flood','burst pipe','sparking','burning smell','no power','active leak','water everywhere','boiler leak'];\nlet urgency = (input.urgency || input.Urgency || 'NORMAL').toUpperCase();\nconst descLower = description.toLowerCase();\nif (emergencyKw.some(k => descLower.includes(k))) urgency = 'EMERGENCY';\n\nconst fingerprint = [email, phone, postcodeInfo.normalized, service, descLower.slice(0,120)].join('|');\n\nreturn [{\n  json: {\n    valid: errors.length === 0,\n    errors,\n    first_name: firstName,\n    last_name: lastName,\n    email,\n    phone,\n    postcode: postcodeInfo.normalized,\n    postcode_district: postcodeInfo.district,\n    service_required: service,\n    description,\n    preferred_date: input.preferred_date || input['Preferred Date'] || null,\n    preferred_time: input.preferred_time || input['Preferred Time'] || null,\n    urgency,\n    consent_to_contact: consent,\n    content_fingerprint: fingerprint,\n    source: input.source || 'WEB_FORM',\n    received_at: new Date().toISOString()\n  }\n}];\n"
+      },
+      "id": "6e104688-511d-4c10-80d6-a5b000ebe01d",
+      "name": "Normalise and Validate Lead Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        300,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "947afa57-3284-4c4b-b796-6aeac7e5b274",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b205ead0-6be1-46e2-8f4d-ae55423bf738",
+      "name": "Validation Passed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        600,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: false, errors: $json.errors, http_status: 400 } }}",
+        "options": {
+          "responseCode": "={{ $json.http_status || 200 }}"
+        }
+      },
+      "id": "11f8ab89-2c3e-436a-b3e2-ba82be53b810",
+      "name": "Return Validation Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        900,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT l.id, l.lead_reference, l.status,\n  CASE\n    WHEN l.content_fingerprint = '{{ $json.content_fingerprint }}' THEN 'EXACT_DUPLICATE'\n    WHEN l.created_at > NOW() - INTERVAL '48 hours'\n      AND c.email = '{{ $json.email }}'\n      AND l.service_category = '{{ $json.service_required }}' THEN 'LIKELY_DUPLICATE'\n    ELSE 'NEW'\n  END AS duplicate_classification\nFROM leads l\nJOIN customers c ON c.id = l.customer_id\nWHERE l.content_fingerprint = '{{ $json.content_fingerprint }}'\n   OR (c.email = '{{ $json.email }}' AND l.created_at > NOW() - INTERVAL '48 hours' AND l.service_category = '{{ $json.service_required }}')\nORDER BY l.created_at DESC LIMIT 1;",
+        "options": {}
+      },
+      "id": "89e8fc5f-8749-44d0-9cd3-49a8a5d5c0cd",
+      "name": "Check Duplicate Lead",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        900,
+        200
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "LOCALFLOW_POSTGRES",
+          "name": "LocalFlow PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "3461b213-11f0-4d9f-8eaf-424b38e8f575",
+              "leftValue": "={{ ['EXACT_DUPLICATE','LIKELY_DUPLICATE'].includes($json.duplicate_classification) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "cfea0a94-a3ce-4c44-9e32-4b2db35153ec",
+      "name": "Is Duplicate?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1200,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: true, duplicate: true, lead_reference: $json.lead_reference, message: 'We already have your enquiry on file.' } }}",
+        "options": {
+          "responseCode": "={{ $json.http_status || 200 }}"
+        }
+      },
+      "id": "08784614-3812-4b74-8959-c3019a5c3d03",
+      "name": "Return Duplicate Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1500,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO customers (first_name, last_name, email, phone, postcode)\nVALUES ('{{ $('Normalise and Validate Lead Payload').item.json.first_name }}',\n        '{{ $('Normalise and Validate Lead Payload').item.json.last_name }}',\n        '{{ $('Normalise and Validate Lead Payload').item.json.email }}',\n        '{{ $('Normalise and Validate Lead Payload').item.json.phone }}',\n        '{{ $('Normalise and Validate Lead Payload').item.json.postcode }}')\nON CONFLICT DO NOTHING;\nSELECT id, (xmax = 0) AS is_new FROM customers WHERE email = '{{ $('Normalise and Validate Lead Payload').item.json.email }}' LIMIT 1;",
+        "options": {}
+      },
+      "id": "04d0ac77-d6ae-4fba-99a3-b3d778178144",
+      "name": "Create or Match Customer",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1500,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "LOCALFLOW_POSTGRES",
+          "name": "LocalFlow PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH nr AS (SELECT generate_lead_reference() AS ref)\nINSERT INTO leads (lead_reference, customer_id, source, service_category, description, urgency, postcode, postcode_district, status, preferred_date, preferred_time, content_fingerprint, consent_to_contact)\nSELECT nr.ref, {{ $json.id }}, '{{ $('Normalise and Validate Lead Payload').item.json.source }}',\n  '{{ $('Normalise and Validate Lead Payload').item.json.service_required }}',\n  '{{ $('Normalise and Validate Lead Payload').item.json.description.replace(/'/g, \"''\") }}',\n  '{{ $('Normalise and Validate Lead Payload').item.json.urgency }}'::urgency_level,\n  '{{ $('Normalise and Validate Lead Payload').item.json.postcode }}',\n  '{{ $('Normalise and Validate Lead Payload').item.json.postcode_district }}',\n  'NEW'::lead_status,\n  NULLIF('{{ $('Normalise and Validate Lead Payload').item.json.preferred_date }}','')::date,\n  NULLIF('{{ $('Normalise and Validate Lead Payload').item.json.preferred_time }}','')::time,\n  '{{ $('Normalise and Validate Lead Payload').item.json.content_fingerprint }}',\n  true\nFROM nr RETURNING *;",
+        "options": {}
+      },
+      "id": "5b9bac56-cc1e-4100-8acb-b202730e8e6b",
+      "name": "Create Lead Record",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1800,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "LOCALFLOW_POSTGRES",
+          "name": "LocalFlow PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { ...$('Normalise and Validate Lead Payload').item.json, lead_id: $json.id, lead_reference: $json.lead_reference, email: $('Normalise and Validate Lead Payload').item.json.email } }];"
+      },
+      "id": "094d2f07-a981-4ec2-91e6-80991b83b993",
+      "name": "Prepare Service Area Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2100,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "WF-03 Service Area Check"
+        },
+        "options": {}
+      },
+      "id": "45b83b35-a5df-49da-a102-0a1d67cd9ae5",
+      "name": "Call Service Area Workflow",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        2400,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "mode": "name",
+          "value": "WF-02 Lead Qualification"
+        },
+        "options": {}
+      },
+      "id": "4314ee8d-9222-4598-826f-ccbfa8b0e10b",
+      "name": "Call Qualification Workflow",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        2700,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE leads SET\n  service_area = '{{ $json.service_area }}'::service_area_class,\n  qualification_score = {{ $json.qualification_score }},\n  qualification_rating = '{{ $json.qualification_rating }}'::qualification_rating,\n  qualification_reasons = '{{ JSON.stringify($json.qualification_reasons).replace(/'/g, \"''\") }}'::jsonb,\n  status = '{{ $json.lead_status }}'::lead_status,\n  first_contact_at = NOW(),\n  updated_at = NOW()\nWHERE id = {{ $('Create Lead Record').item.json.id }}\nRETURNING *;",
+        "options": {}
+      },
+      "id": "cb7fd778-79b4-4943-aacd-64ce96eb2c7b",
+      "name": "Update Lead After Qualification",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        3000,
+        200
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "LOCALFLOW_POSTGRES",
+          "name": "LocalFlow PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "917aeedc-945e-4271-9a3b-cc436a328478",
+              "leftValue": "={{ ['VERY_HIGH','HIGH'].includes($json.qualification_rating) || $json.urgency === 'EMERGENCY' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "266f31f0-de25-4fed-8dfc-436b01199e4d",
+      "name": "Very High Priority?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3300,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "office@northamptonhomeservices.demo",
+        "toEmail": "owner@northamptonhomeservices.demo",
+        "subject": "={{ 'HIGH PRIORITY LEAD \u2014 ' + $json.lead_reference }}",
+        "emailFormat": "text",
+        "text": "={{ 'HIGH PRIORITY LEAD\\n\\nLead: ' + $json.lead_reference + '\\nCustomer: ' + $('Normalise and Validate Lead Payload').item.json.first_name + ' ' + $('Normalise and Validate Lead Payload').item.json.last_name + '\\nService: ' + $json.service_category + '\\nPostcode: ' + $json.postcode + '\\nScore: ' + $json.qualification_score + '/100\\nUrgency: ' + $json.urgency + '\\n\\nAction: Contact customer immediately.' }}",
+        "options": {}
+      },
+      "id": "08b3f94e-8c21-4c70-b0ff-63e826c9dcbb",
+      "name": "Send Owner Priority Alert",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        3600,
+        100
+      ],
+      "credentials": {
+        "smtp": {
+          "id": "LOCALFLOW_MAILPIT",
+          "name": "LocalFlow Mailpit SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "office@northamptonhomeservices.demo",
+        "toEmail": "={{ $('Normalise and Validate Lead Payload').item.json.email }}",
+        "subject": "={{ 'Enquiry received \u2014 ' + $json.lead_reference }}",
+        "emailFormat": "text",
+        "text": "={{ 'Dear ' + $('Normalise and Validate Lead Payload').item.json.first_name + ',\\n\\nThank you for contacting Northampton Home Services Ltd.\\n\\nReference: ' + $json.lead_reference + '\\nService: ' + $json.service_category + '\\nPostcode: ' + $json.postcode + '\\n\\nWe will review your enquiry and contact you shortly. This is not a confirmed appointment.\\n\\nNorthampton Home Services Ltd' }}",
+        "options": {}
+      },
+      "id": "fa1a55ec-8ab2-44d3-835f-c9cb810d9f07",
+      "name": "Send Customer Acknowledgement",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        3600,
+        300
+      ],
+      "credentials": {
+        "smtp": {
+          "id": "LOCALFLOW_MAILPIT",
+          "name": "LocalFlow Mailpit SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO communications (customer_id, lead_id, channel, communication_type, recipient, subject, status, sent_at, idempotency_key)\nVALUES\n({{ $json.customer_id }}, {{ $json.id }}, 'EMAIL', 'LEAD_ACKNOWLEDGEMENT', '{{ $('Normalise and Validate Lead Payload').item.json.email }}', 'Enquiry received', 'SENT', NOW(), 'ack-' || {{ $json.id }}),\n({{ $json.customer_id }}, {{ $json.id }}, 'EMAIL', 'OWNER_ALERT', 'owner@northamptonhomeservices.demo', 'Priority lead alert', 'SENT', NOW(), 'alert-' || {{ $json.id }})\nON CONFLICT (idempotency_key) DO NOTHING RETURNING id;",
+        "options": {}
+      },
+      "id": "81b78b14-220b-4f4c-83d7-e554b879e272",
+      "name": "Log Communication Records",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        3900,
+        200
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "LOCALFLOW_POSTGRES",
+          "name": "LocalFlow PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO workflow_runs (workflow_name, business_entity_type, business_entity_id, status, completed_at, duration_ms)\nVALUES ('WF-01 Lead Intake', 'lead', {{ $json.id }}, 'SUCCESS', NOW(), 0) RETURNING id;",
+        "options": {}
+      },
+      "id": "bd474b04-21d8-429d-89f3-b4e61f8a1147",
+      "name": "Log Successful Execution",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        4200,
+        200
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "LOCALFLOW_POSTGRES",
+          "name": "LocalFlow PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { success: true, lead_reference: $('Create Lead Record').item.json.lead_reference, qualification_score: $json.qualification_score, qualification_rating: $json.qualification_rating, service_area: $json.service_area } }}",
+        "options": {
+          "responseCode": "={{ $json.http_status || 200 }}"
+        }
+      },
+      "id": "22657208-a409-488a-b1cd-422a49bf9b4e",
+      "name": "Return Success Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        4500,
+        200
+      ]
+    }
+  ],
+  "connections": {
+    "Customer Enquiry Form": {
+      "main": [
+        [
+          {
+            "node": "Normalise and Validate Lead Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lead Intake Webhook": {
+      "main": [
+        [
+          {
+            "node": "Normalise and Validate Lead Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalise and Validate Lead Payload": {
+      "main": [
+        [
+          {
+            "node": "Validation Passed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validation Passed?": {
+      "main": [
+        [
+          {
+            "node": "Check Duplicate Lead",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return Validation Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Duplicate Lead": {
+      "main": [
+        [
+          {
+            "node": "Is Duplicate?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Duplicate?": {
+      "main": [
+        [
+          {
+            "node": "Return Duplicate Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create or Match Customer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create or Match Customer": {
+      "main": [
+        [
+          {
+            "node": "Create Lead Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Lead Record": {
+      "main": [
+        [
+          {
+            "node": "Prepare Service Area Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Service Area Input": {
+      "main": [
+        [
+          {
+            "node": "Call Service Area Workflow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Service Area Workflow": {
+      "main": [
+        [
+          {
+            "node": "Call Qualification Workflow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Qualification Workflow": {
+      "main": [
+        [
+          {
+            "node": "Update Lead After Qualification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Lead After Qualification": {
+      "main": [
+        [
+          {
+            "node": "Very High Priority?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Very High Priority?": {
+      "main": [
+        [
+          {
+            "node": "Send Owner Priority Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Customer Acknowledgement",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Owner Priority Alert": {
+      "main": [
+        [
+          {
+            "node": "Send Customer Acknowledgement",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Customer Acknowledgement": {
+      "main": [
+        [
+          {
+            "node": "Log Communication Records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Communication Records": {
+      "main": [
+        [
+          {
+            "node": "Log Successful Execution",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Successful Execution": {
+      "main": [
+        [
+          {
+            "node": "Return Success Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "4831c60b-6033-4eb1-a83c-baf13a3baf32",
+  "meta": {
+    "instanceId": "localflow-case-study"
+  },
+  "tags": []
+}

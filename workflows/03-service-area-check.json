@@ -1,0 +1,159 @@
+{
+  "id": "a960c406-4149-4f92-a4d6-684b9d0f590d",
+  "name": "WF-03 Service Area Check",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "WF-03 Service Area Check\nConfigurable NN districts",
+        "width": 300,
+        "height": 120
+      },
+      "id": "827b6f81-72b4-4504-99c5-a51679fab941",
+      "name": "WF-03 Service Area Check",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -200,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst item = $input.first().json;\nconst district = item.postcode_district || item.postcode?.split(' ')[0];\nconst primary = ['NN1','NN2','NN3','NN4','NN5'];\nconst extended = ['NN6','NN7','NN8','NN9','NN10','NN11','NN12'];\nlet service_area = 'OUTSIDE';\nif (primary.includes(district)) service_area = 'PRIMARY';\nelse if (extended.includes(district)) service_area = 'EXTENDED';\nreturn [{ json: { ...item, service_area, postcode_district: district, api_fallback_used: true } }];\n"
+      },
+      "id": "624032b2-4ce8-4361-b718-e950e8fd3ae7",
+      "name": "Calculate Service Area",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "3de0445b-6bcb-4c65-afa5-a5fd5ef4b0f7",
+              "leftValue": "={{ $json.service_area === 'OUTSIDE' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e499cdbd-697d-4ab4-b67b-f2dfb6f31d1e",
+      "name": "Is Outside Service Area?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        300,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "office@northamptonhomeservices.demo",
+        "toEmail": "={{ $json.email }}",
+        "subject": "={{ 'Thank you for contacting Northampton Home Services \u2014 Ref pending' }}",
+        "emailFormat": "text",
+        "text": "={{ 'Thank you for your enquiry. Unfortunately your postcode (' + $json.postcode + ') is outside our standard service area. We primarily serve Northampton (NN1\u2013NN12). If you believe this is an error, please call 01604 000000.' }}",
+        "options": {}
+      },
+      "id": "63522896-8098-4127-a3ad-de26fe120061",
+      "name": "Send Outside Area Response",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        600,
+        100
+      ],
+      "credentials": {
+        "smtp": {
+          "id": "LOCALFLOW_MAILPIT",
+          "name": "LocalFlow Mailpit SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": "={{ $json.http_status || 200 }}"
+        }
+      },
+      "id": "65b7296a-1aff-4b1a-aa76-ad7bd5948243",
+      "name": "Return Service Area Classification",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        600,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Calculate Service Area": {
+      "main": [
+        [
+          {
+            "node": "Is Outside Service Area?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Outside Service Area?": {
+      "main": [
+        [
+          {
+            "node": "Send Outside Area Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return Service Area Classification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Outside Area Response": {
+      "main": [
+        [
+          {
+            "node": "Return Service Area Classification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "a16e1c2b-c2f6-465c-84d8-862cf7261ee3",
+  "meta": {
+    "instanceId": "localflow-case-study"
+  },
+  "tags": []
+}

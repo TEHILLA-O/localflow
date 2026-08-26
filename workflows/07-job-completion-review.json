@@ -1,0 +1,318 @@
+{
+  "id": "f3927aac-c91b-4724-a35c-c2c7244ac34d",
+  "name": "WF-07 Job Completion Review",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "WF-07 Job Completion & Review",
+        "width": 300,
+        "height": 120
+      },
+      "id": "f965289e-7817-41b4-840b-04cea2cc47ab",
+      "name": "WF-07 Job Completion & Review",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -200,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "job/complete",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "b1a5dd9c-718a-43f1-bf4b-633f542c5e19",
+      "name": "Job Complete Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        200
+      ],
+      "webhookId": "c4c976cf-4403-48e2-985d-4a688b0932f2"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE jobs SET status = 'COMPLETED'::job_status, completed_at = NOW(), updated_at = NOW()\nWHERE id = {{ ($json.body || $json).job_id }} RETURNING *;",
+        "options": {}
+      },
+      "id": "feac2f4f-2d63-4631-9435-6c90e339a219",
+      "name": "Update Job Completed",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        300,
+        200
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "LOCALFLOW_POSTGRES",
+          "name": "LocalFlow PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE bookings SET status = 'COMPLETED'::booking_status, updated_at = NOW() WHERE id = {{ $json.booking_id }};\nUPDATE leads SET status = 'COMPLETED'::lead_status, updated_at = NOW() WHERE id = {{ $json.lead_id }};",
+        "options": {}
+      },
+      "id": "b0d26a8e-0d9f-48f5-99f8-ef24d485da85",
+      "name": "Update Booking And Lead",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        600,
+        200
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "LOCALFLOW_POSTGRES",
+          "name": "LocalFlow PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "office@northamptonhomeservices.demo",
+        "toEmail": "={{ $json.recipient || $json.email }}",
+        "subject": "={{ 'Thank you \u2014 ' + $json.job_reference }}",
+        "emailFormat": "text",
+        "text": "={{ 'Thank you for choosing Northampton Home Services.\\n\\nWas everything satisfactory? Reply YES or NO to this email.\\n\\nJob reference: ' + $json.job_reference }}",
+        "options": {}
+      },
+      "id": "b2a2181f-29b0-4df6-9220-bdbc2a941495",
+      "name": "Send Thank You Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        900,
+        200
+      ],
+      "credentials": {
+        "smtp": {
+          "id": "LOCALFLOW_MAILPIT",
+          "name": "LocalFlow Mailpit SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "job/satisfaction",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "2d66510f-9553-403a-ae99-9e1fb2fa8e26",
+      "name": "Satisfaction Response Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        500
+      ],
+      "webhookId": "524fb7ab-e44d-462e-b359-86b4393b01ab"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "a8781f3d-8e79-4d40-a7da-ab03edb607f8",
+              "leftValue": "={{ ($json.body || $json).satisfied === true || ($json.body || $json).response === 'YES' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "7bf8275a-1481-4986-8efe-02e484681f5d",
+      "name": "Customer Satisfied?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        300,
+        500
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "office@northamptonhomeservices.demo",
+        "toEmail": "={{ $json.recipient || $json.email }}",
+        "subject": "We value your feedback",
+        "emailFormat": "text",
+        "text": "Thank you! Please share your experience: https://example.com/reviews/northampton-home-services",
+        "options": {}
+      },
+      "id": "48d62d56-5bfb-4820-99b0-452a616d1835",
+      "name": "Send Review Request",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        600,
+        400
+      ],
+      "credentials": {
+        "smtp": {
+          "id": "LOCALFLOW_MAILPIT",
+          "name": "LocalFlow Mailpit SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "office@northamptonhomeservices.demo",
+        "toEmail": "owner@northamptonhomeservices.demo",
+        "subject": "SERVICE RECOVERY REQUIRED",
+        "emailFormat": "text",
+        "text": "Customer reported dissatisfaction. Manual follow-up required.",
+        "options": {}
+      },
+      "id": "c8c6532a-6a5d-46d0-8453-1ffd2105dd4f",
+      "name": "Send Service Recovery Alert",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        600,
+        600
+      ],
+      "credentials": {
+        "smtp": {
+          "id": "LOCALFLOW_MAILPIT",
+          "name": "LocalFlow Mailpit SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO reviews (job_id, customer_id, customer_satisfied, review_requested, review_status, request_sent_at)\nVALUES ({{ $('Update Job Completed').item.json.id }}, {{ $('Update Job Completed').item.json.customer_id }},\n  {{ ($json.body || $json).satisfied === true || ($json.body || $json).response === 'YES' }},\n  {{ ($json.body || $json).satisfied === true || ($json.body || $json).response === 'YES' }},\n  CASE WHEN {{ ($json.body || $json).satisfied === true || ($json.body || $json).response === 'YES' }} THEN 'REQUESTED'::review_status ELSE 'SUPPRESSED'::review_status END,\n  NOW())\nON CONFLICT DO NOTHING;",
+        "options": {}
+      },
+      "id": "c7c4dced-cd86-40d7-8252-d6385b2e2252",
+      "name": "Record Review Outcome",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        900,
+        500
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "LOCALFLOW_POSTGRES",
+          "name": "LocalFlow PostgreSQL"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Job Complete Webhook": {
+      "main": [
+        [
+          {
+            "node": "Update Job Completed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Job Completed": {
+      "main": [
+        [
+          {
+            "node": "Update Booking And Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Booking And Lead": {
+      "main": [
+        [
+          {
+            "node": "Send Thank You Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Satisfaction Response Webhook": {
+      "main": [
+        [
+          {
+            "node": "Customer Satisfied?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Customer Satisfied?": {
+      "main": [
+        [
+          {
+            "node": "Send Review Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Service Recovery Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Review Request": {
+      "main": [
+        [
+          {
+            "node": "Record Review Outcome",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Service Recovery Alert": {
+      "main": [
+        [
+          {
+            "node": "Record Review Outcome",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "5d1ffe9b-293c-4bc4-8270-a31d221cf110",
+  "meta": {
+    "instanceId": "localflow-case-study"
+  },
+  "tags": []
+}

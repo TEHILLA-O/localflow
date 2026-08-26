@@ -1,0 +1,175 @@
+{
+  "id": "80e9862c-9687-4002-b824-9fa1a8162016",
+  "name": "WF-10 Weekly Business Report",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "WF-10 Weekly Business Report",
+        "width": 300,
+        "height": 120
+      },
+      "id": "56bb26ba-e6a2-4cd0-b6c8-740d0f4ae790",
+      "name": "WF-10 Weekly Business Report",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -200,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 8 * * 1"
+            }
+          ]
+        }
+      },
+      "id": "d0194ce7-540e-4e21-9f51-6f34461e04a5",
+      "name": "Monday 08:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH period AS (\n  SELECT CURRENT_DATE - INTERVAL '7 days' AS start_at, CURRENT_DATE AS end_at\n)\nSELECT\n  (SELECT COUNT(*) FROM leads l, period p WHERE l.created_at >= p.start_at AND l.created_at < p.end_at) AS leads_received,\n  (SELECT COUNT(*) FROM leads l, period p WHERE l.status IN ('QUALIFIED','BOOKED','COMPLETED') AND l.created_at >= p.start_at) AS leads_qualified,\n  (SELECT COUNT(*) FROM leads l, period p WHERE l.status = 'OUTSIDE_SERVICE_AREA' AND l.created_at >= p.start_at) AS outside_area,\n  (SELECT COUNT(*) FROM leads l, period p WHERE l.status = 'DUPLICATE' AND l.created_at >= p.start_at) AS duplicates,\n  (SELECT COUNT(*) FROM bookings b, period p WHERE b.created_at >= p.start_at AND b.created_at < p.end_at) AS bookings_created,\n  (SELECT COUNT(*) FROM jobs j, period p WHERE j.status = 'COMPLETED' AND j.completed_at >= p.start_at) AS jobs_completed,\n  (SELECT COUNT(*) FROM follow_ups f, period p WHERE f.status = 'SENT' AND f.sent_at >= p.start_at) AS follow_ups_sent,\n  (SELECT COUNT(*) FROM reviews r, period p WHERE r.review_requested AND r.request_sent_at >= p.start_at) AS review_requests,\n  (SELECT COUNT(*) FROM reviews r, period p WHERE r.customer_satisfied = false AND r.created_at >= p.start_at) AS unsatisfied,\n  (SELECT COUNT(*) FROM workflow_runs w, period p WHERE w.created_at >= p.start_at) AS workflow_runs,\n  (SELECT COUNT(*) FROM workflow_runs w, period p WHERE w.status = 'FAILED' AND w.created_at >= p.start_at) AS workflow_failed;",
+        "options": {}
+      },
+      "id": "6fcbc511-ec7b-47a8-a5ad-04fea6853842",
+      "name": "Aggregate Weekly Metrics",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        300,
+        200
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "LOCALFLOW_POSTGRES",
+          "name": "LocalFlow PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst m = $input.first().json;\nconst l2b = m.leads_received ? ((m.bookings_created / m.leads_received) * 100).toFixed(1) : 'N/A';\nconst b2c = m.bookings_created ? ((m.jobs_completed / m.bookings_created) * 100).toFixed(1) : 'N/A';\nconst body = `LOCALFLOW WEEKLY OPERATIONS\\n\\nLEADS\\nReceived: ${m.leads_received}\\nQualified: ${m.leads_qualified}\\nOutside area: ${m.outside_area}\\nDuplicates: ${m.duplicates}\\n\\nCONVERSION\\nLead \u2192 Booking: ${l2b}%\\nBooking \u2192 Completed: ${b2c}%\\n\\nOPERATIONS\\nBookings: ${m.bookings_created}\\nCompleted jobs: ${m.jobs_completed}\\nFollow-ups sent: ${m.follow_ups_sent}\\n\\nCUSTOMER EXPERIENCE\\nReview requests: ${m.review_requests}\\nUnsatisfied: ${m.unsatisfied}\\n\\nAUTOMATION\\nRuns: ${m.workflow_runs}\\nFailed: ${m.workflow_failed}\\n`;\nreturn [{ json: { ...m, report_body: body, lead_to_booking_rate: l2b, booking_to_completion_rate: b2c } }];\n"
+      },
+      "id": "170d0ad7-7e71-46b8-a305-89c69b1bea3a",
+      "name": "Format Weekly Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        600,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "office@northamptonhomeservices.demo",
+        "toEmail": "owner@northamptonhomeservices.demo",
+        "subject": "LocalFlow Weekly Business Report",
+        "emailFormat": "text",
+        "text": "={{ $json.report_body }}",
+        "options": {}
+      },
+      "id": "f1673aea-5f72-4a96-8b16-322459e660ab",
+      "name": "Send Weekly Report",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        900,
+        200
+      ],
+      "credentials": {
+        "smtp": {
+          "id": "LOCALFLOW_MAILPIT",
+          "name": "LocalFlow Mailpit SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO reporting_snapshots (report_type, period_start, period_end, metrics_json)\nVALUES ('WEEKLY_REPORT', CURRENT_DATE - INTERVAL '7 days', CURRENT_DATE, '{{ JSON.stringify($json).replace(/'/g, \"''\") }}'::jsonb);",
+        "options": {}
+      },
+      "id": "951e7f35-1636-454f-bf87-fa066120192b",
+      "name": "Store Weekly Snapshot",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1200,
+        200
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "LOCALFLOW_POSTGRES",
+          "name": "LocalFlow PostgreSQL"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Monday 08:00": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Weekly Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Weekly Metrics": {
+      "main": [
+        [
+          {
+            "node": "Format Weekly Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Weekly Report": {
+      "main": [
+        [
+          {
+            "node": "Send Weekly Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Weekly Report": {
+      "main": [
+        [
+          {
+            "node": "Store Weekly Snapshot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "f3ed8849-2789-4989-b557-bdf26fd4a891",
+  "meta": {
+    "instanceId": "localflow-case-study"
+  },
+  "tags": []
+}

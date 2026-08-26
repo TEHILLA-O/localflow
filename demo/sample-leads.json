@@ -1,0 +1,24 @@
+[
+  {
+    "first_name": "Sarah",
+    "last_name": "Williams",
+    "email": "sarah.williams@example.demo",
+    "phone": "07700 900123",
+    "postcode": "NN3 8AB",
+    "service_required": "PLUMBING",
+    "description": "Kitchen tap dripping constantly.",
+    "urgency": "NORMAL",
+    "consent_to_contact": true
+  },
+  {
+    "first_name": "Marcus",
+    "last_name": "Thompson",
+    "email": "marcus.thompson@example.demo",
+    "phone": "+44 7700 900456",
+    "postcode": "nn1 1aa",
+    "service_required": "PLUMBING",
+    "description": "Water pouring from pipe under sink — active leak, water isolated.",
+    "urgency": "EMERGENCY",
+    "consent_to_contact": true
+  }
+]

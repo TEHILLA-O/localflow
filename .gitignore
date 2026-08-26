@@ -1,0 +1,51 @@
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+credentials.json
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+
+# Node (if used)
+node_modules/
+
+# Docker volumes / local data
+data/
+postgres-data/
+n8n-data/
+backups/*.sql
+backups/*.dump
+
+# Logs
+*.log
+logs/
+
+# Build artifacts
+dist/
+build/
+.coverage
+htmlcov/
+
+# Temporary
+tmp/
+temp/
+*.tmp

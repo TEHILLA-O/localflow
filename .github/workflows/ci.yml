@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Generate artifacts
+        run: |
+          python scripts/generate-workflows.py
+          python scripts/generate-demo-data.py
+
+      - name: Validate workflow JSON
+        run: python scripts/validate-workflows.py
+
+      - name: Lint Python helpers
+        run: python -m py_compile scripts/*.py
+
+      - name: Secret pattern scan
+        run: |
+          ! grep -rEi '(password|api_key|secret)\s*[:=]\s*["'"'"'][^"'"'"']{12,}' \
+            --include='*.json' --include='*.yml' workflows/ docker-compose.yml || \
+          (echo "Possible secret found" && exit 1)
+
+      - name: Verify required workflow files exist
+        run: |
+          for f in 01-lead-intake.json 02-lead-qualification.json 03-service-area-check.json \
+                   04-booking-management.json 05-appointment-reminders.json 06-lead-follow-up.json \
+                   07-job-completion-review.json 08-error-handler.json 09-daily-operations-brief.json \
+                   10-weekly-business-report.json; do
+            test -f "workflows/$f" || (echo "Missing workflows/$f" && exit 1)
+          done
+
+      - name: Validate SQL files present
+        run: |
+          test -f database/init/001-schema.sql
+          test -f database/init/002-indexes.sql
+          test -f database/init/003-demo-data.sql
+
+      - name: Docker Compose config
+        run: docker compose config -q

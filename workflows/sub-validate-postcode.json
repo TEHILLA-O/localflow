@@ -1,0 +1,73 @@
+{
+  "id": "359b7fbb-5d67-4dbc-9a78-9150f607d95d",
+  "name": "Sub: Validate Postcode",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "Sub-workflow: Validate & Normalise Postcode",
+        "width": 300,
+        "height": 120
+      },
+      "id": "b9feb33b-772d-42fb-b2c8-ba8711a0dfc8",
+      "name": "Sub-workflow: Validate & Normalise Postc",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -200,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst item = $input.first().json;\nconst district = item.postcode_district || item.postcode?.split(' ')[0];\nconst primary = ['NN1','NN2','NN3','NN4','NN5'];\nconst extended = ['NN6','NN7','NN8','NN9','NN10','NN11','NN12'];\nlet postcode_check = 'OUTSIDE';\nif (primary.includes(district)) postcode_check = 'PRIMARY';\nelse if (extended.includes(district)) postcode_check = 'EXTENDED';\nreturn [{ json: { ...item, postcode_check, postcode_district: district, api_fallback_used: true } }];\n"
+      },
+      "id": "ca50508b-e73d-4447-8334-55c72fbf888f",
+      "name": "Normalise Postcode Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        200,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": "={{ $json.http_status || 200 }}"
+        }
+      },
+      "id": "20ed585e-4f0e-476d-83d2-c3ca33674357",
+      "name": "Return Postcode Result",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        500,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Normalise Postcode Input": {
+      "main": [
+        [
+          {
+            "node": "Return Postcode Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "f690cdcf-5505-469e-9b0b-71d77d6cccc8",
+  "meta": {
+    "instanceId": "localflow-case-study"
+  },
+  "tags": []
+}

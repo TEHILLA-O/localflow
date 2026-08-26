@@ -1,0 +1,151 @@
+{
+  "id": "3756ebf0-ca08-4373-bc0f-98ea404fe7fb",
+  "name": "WF-06 Lead Follow-Up",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "WF-06 Lead Follow-Up\nStops when booked/cancelled/dormant",
+        "width": 300,
+        "height": 120
+      },
+      "id": "cf765475-54ee-44b9-b4c7-38f0f9d705db",
+      "name": "WF-06 Lead Follow-Up",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -200,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 * * * *"
+            }
+          ]
+        }
+      },
+      "id": "43e6f04e-e2c6-48da-b9b7-a0fc5c01ecf4",
+      "name": "Hourly Follow-Up Check",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT l.*, c.email, c.first_name FROM leads l\nJOIN customers c ON c.id = l.customer_id\nWHERE l.status IN ('QUALIFIED','CONTACTED','BOOKING_PENDING')\n  AND NOT EXISTS (\n    SELECT 1 FROM follow_ups f WHERE f.lead_id = l.id AND f.follow_up_type = 'FOLLOW_UP_1' AND f.status = 'SENT'\n  )\n  AND l.updated_at < NOW() - INTERVAL '2 hours';",
+        "options": {}
+      },
+      "id": "5f4a5b4a-bef5-46c9-bb9d-2f2686d9f680",
+      "name": "Find Leads Needing Follow-Up",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        300,
+        200
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "LOCALFLOW_POSTGRES",
+          "name": "LocalFlow PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "office@northamptonhomeservices.demo",
+        "toEmail": "={{ $json.recipient || $json.email }}",
+        "subject": "={{ 'Following up on your enquiry \u2014 ' + $json.lead_reference }}",
+        "emailFormat": "text",
+        "text": "={{ 'Dear ' + $json.first_name + ',\\n\\nWe wanted to follow up on your enquiry (' + $json.lead_reference + '). Would you like to book an appointment? Reply or call 01604 000000.\\n\\nNorthampton Home Services Ltd' }}",
+        "options": {}
+      },
+      "id": "75ccf605-3101-419b-9854-7b8bcae933fd",
+      "name": "Send Follow-Up 1",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        600,
+        200
+      ],
+      "credentials": {
+        "smtp": {
+          "id": "LOCALFLOW_MAILPIT",
+          "name": "LocalFlow Mailpit SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO follow_ups (lead_id, follow_up_type, scheduled_for, sent_at, status, idempotency_key)\nVALUES ({{ $json.id }}, 'FOLLOW_UP_1', NOW(), NOW(), 'SENT', 'fu1-' || {{ $json.id }})\nON CONFLICT (idempotency_key) DO NOTHING;\nUPDATE leads SET last_contact_at = NOW(), status = 'CONTACTED'::lead_status WHERE id = {{ $json.id }};",
+        "options": {}
+      },
+      "id": "818b537b-8b92-454a-bf7e-7c60e7dc2b4d",
+      "name": "Record Follow-Up 1",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        900,
+        200
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "LOCALFLOW_POSTGRES",
+          "name": "LocalFlow PostgreSQL"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Hourly Follow-Up Check": {
+      "main": [
+        [
+          {
+            "node": "Find Leads Needing Follow-Up",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Leads Needing Follow-Up": {
+      "main": [
+        [
+          {
+            "node": "Send Follow-Up 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Follow-Up 1": {
+      "main": [
+        [
+          {
+            "node": "Record Follow-Up 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "2582b264-b74e-4043-b225-a23629476cee",
+  "meta": {
+    "instanceId": "localflow-case-study"
+  },
+  "tags": []
+}

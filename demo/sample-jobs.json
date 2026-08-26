@@ -1,0 +1,5 @@
+[
+  {"job_reference": "JOB-2026-000001", "status": "COMPLETED", "notes": "Demo completed job"},
+  {"job_reference": "JOB-2026-000002", "status": "COMPLETED", "notes": "Demo completed job"},
+  {"job_reference": "JOB-2026-000003", "status": "COMPLETED", "notes": "Demo completed job"}
+]

@@ -1,0 +1,7 @@
+[
+  {"first_name": "Anna", "last_name": "Roberts", "email": "anna.roberts0@example.demo", "phone": "07125 877572", "postcode": "NN5 5PL"},
+  {"first_name": "Jessica", "last_name": "Thomas", "email": "jessica.thomas1@example.demo", "phone": "07792 876646", "postcode": "NN10 6YU"},
+  {"first_name": "Adam", "last_name": "Taylor", "email": "adam.taylor2@example.demo", "phone": "07130 198246", "postcode": "NN4 8LA"},
+  {"first_name": "Charlotte", "last_name": "Davies", "email": "charlotte.davies3@example.demo", "phone": "07987 654321", "postcode": "NN3 8HQ"},
+  {"first_name": "Oliver", "last_name": "Wilson", "email": "oliver.wilson4@example.demo", "phone": "07845 123456", "postcode": "NN2 6BT"}
+]

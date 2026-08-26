@@ -1,0 +1,244 @@
+{
+  "id": "0eb53c74-1a52-40e8-a34d-1588233c3ab2",
+  "name": "WF-05 Appointment Reminders",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "WF-05 Appointment Reminders\nIdempotent 24h and 2h reminders",
+        "width": 300,
+        "height": 120
+      },
+      "id": "ae8f2dad-525a-4a15-a2cd-ae9707ef71df",
+      "name": "WF-05 Appointment Reminders",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -200,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "*/15 * * * *"
+            }
+          ]
+        }
+      },
+      "id": "1c9216d3-deec-4cc1-adc3-5db0007e5173",
+      "name": "Every 15 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT b.*, c.email, c.first_name FROM bookings b\nJOIN customers c ON c.id = b.customer_id\nWHERE b.status IN ('BOOKED','CONFIRMED')\n  AND b.reminder_24h_sent_at IS NULL\n  AND b.start_at <= NOW() + INTERVAL '24 hours'\n  AND b.start_at > NOW() + INTERVAL '23 hours';",
+        "options": {}
+      },
+      "id": "82c0a4dc-189f-4b64-b539-558ac41eced3",
+      "name": "Find Bookings Needing 24h Reminder",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        300,
+        100
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "LOCALFLOW_POSTGRES",
+          "name": "LocalFlow PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "office@northamptonhomeservices.demo",
+        "toEmail": "={{ $json.recipient || $json.email }}",
+        "subject": "={{ 'Reminder: appointment tomorrow \u2014 ' + $json.booking_reference }}",
+        "emailFormat": "text",
+        "text": "={{ 'Dear ' + $json.first_name + ',\\n\\nReminder: your appointment (' + $json.booking_reference + ') is in approximately 24 hours on ' + $json.start_at + '.\\n\\nNorthampton Home Services Ltd' }}",
+        "options": {}
+      },
+      "id": "4f1067a7-3605-4a81-aa70-cc9341a82728",
+      "name": "Send 24h Reminder",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        600,
+        100
+      ],
+      "credentials": {
+        "smtp": {
+          "id": "LOCALFLOW_MAILPIT",
+          "name": "LocalFlow Mailpit SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE bookings SET reminder_24h_sent_at = NOW(), updated_at = NOW()\nWHERE id = {{ $json.id }} AND reminder_24h_sent_at IS NULL RETURNING id;",
+        "options": {}
+      },
+      "id": "0ff3439b-18c2-4dcf-af62-eec0f0ef8fea",
+      "name": "Mark 24h Reminder Sent",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        900,
+        100
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "LOCALFLOW_POSTGRES",
+          "name": "LocalFlow PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT b.*, c.email, c.first_name FROM bookings b\nJOIN customers c ON c.id = b.customer_id\nWHERE b.status IN ('BOOKED','CONFIRMED')\n  AND b.reminder_2h_sent_at IS NULL\n  AND b.start_at <= NOW() + INTERVAL '2 hours'\n  AND b.start_at > NOW();",
+        "options": {}
+      },
+      "id": "cb0f3348-f313-4aa2-9aaf-688507334eb6",
+      "name": "Find Bookings Needing 2h Reminder",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        300,
+        400
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "LOCALFLOW_POSTGRES",
+          "name": "LocalFlow PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "office@northamptonhomeservices.demo",
+        "toEmail": "={{ $json.recipient || $json.email }}",
+        "subject": "={{ 'Reminder: appointment in 2 hours \u2014 ' + $json.booking_reference }}",
+        "emailFormat": "text",
+        "text": "={{ 'Dear ' + $json.first_name + ',\\n\\nYour technician will arrive in approximately 2 hours for booking ' + $json.booking_reference + '.\\n\\nNorthampton Home Services Ltd' }}",
+        "options": {}
+      },
+      "id": "1112d2bf-d47e-41d5-a290-6c925155a1c5",
+      "name": "Send 2h Reminder",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        600,
+        400
+      ],
+      "credentials": {
+        "smtp": {
+          "id": "LOCALFLOW_MAILPIT",
+          "name": "LocalFlow Mailpit SMTP"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE bookings SET reminder_2h_sent_at = NOW(), updated_at = NOW()\nWHERE id = {{ $json.id }} AND reminder_2h_sent_at IS NULL RETURNING id;",
+        "options": {}
+      },
+      "id": "5961401b-62f1-4764-86c6-4ddd7f6dc699",
+      "name": "Mark 2h Reminder Sent",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        900,
+        400
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "LOCALFLOW_POSTGRES",
+          "name": "LocalFlow PostgreSQL"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every 15 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Find Bookings Needing 24h Reminder",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Find Bookings Needing 2h Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Bookings Needing 24h Reminder": {
+      "main": [
+        [
+          {
+            "node": "Send 24h Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send 24h Reminder": {
+      "main": [
+        [
+          {
+            "node": "Mark 24h Reminder Sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Bookings Needing 2h Reminder": {
+      "main": [
+        [
+          {
+            "node": "Send 2h Reminder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send 2h Reminder": {
+      "main": [
+        [
+          {
+            "node": "Mark 2h Reminder Sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "545c9ab9-cecc-4422-aa6a-2f44a5587b32",
+  "meta": {
+    "instanceId": "localflow-case-study"
+  },
+  "tags": []
+}

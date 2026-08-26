@@ -1,0 +1,73 @@
+{
+  "id": "19de0be1-1bee-409d-ab2c-5d19abd0b7e1",
+  "name": "WF-02 Lead Qualification",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "WF-02 Lead Qualification\nDeterministic scoring 0-100",
+        "width": 300,
+        "height": 120
+      },
+      "id": "9412c6e5-f0d4-4ef6-8464-95946ce0671c",
+      "name": "WF-02 Lead Qualification",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -200,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst item = $input.first().json;\nconst reasons = [];\nlet score = 0;\nconst weights = {\n  primary_area: 25, extended_area: 15, emergency: 20, urgent: 12,\n  supported_service: 20, complete_contact: 10, preferred_appointment: 5,\n  detailed_description: 5, returning_customer: 5,\n  unsupported_service: -40, outside_area: -50, missing_info: -20\n};\nconst supported = ['PLUMBING','ELECTRICAL','HEATING','PROPERTY_MAINTENANCE'];\n\nif (item.service_area === 'PRIMARY') { score += weights.primary_area; reasons.push('Primary service area: +25'); }\nelse if (item.service_area === 'EXTENDED') { score += weights.extended_area; reasons.push('Extended service area: +15'); }\nelse { score += weights.outside_area; reasons.push('Outside service area: -50'); }\n\nif (item.urgency === 'EMERGENCY') { score += weights.emergency; reasons.push('Emergency request: +20'); }\nelse if (item.urgency === 'URGENT') { score += weights.urgent; reasons.push('Urgent request: +12'); }\n\nif (supported.includes(item.service_required)) { score += weights.supported_service; reasons.push(`Supported ${item.service_required.toLowerCase()} service: +20`); }\nelse { score += weights.unsupported_service; reasons.push('Unsupported service: -40'); }\n\nif (item.email && item.phone && item.postcode) { score += weights.complete_contact; reasons.push('Complete contact details: +10'); }\nelse { score += weights.missing_info; reasons.push('Missing essential information: -20'); }\n\nif (item.preferred_date) { score += weights.preferred_appointment; reasons.push('Preferred booking date provided: +5'); }\nif ((item.description || '').length >= 40) { score += weights.detailed_description; reasons.push('Detailed description: +5'); }\nif (item.is_returning_customer) { score += weights.returning_customer; reasons.push('Returning customer: +5'); }\n\nscore = Math.max(0, Math.min(100, score));\nlet rating = 'VERY_LOW';\nif (score >= 80) rating = 'VERY_HIGH';\nelse if (score >= 65) rating = 'HIGH';\nelse if (score >= 45) rating = 'MEDIUM';\nelse if (score >= 25) rating = 'LOW';\n\nlet status = item.service_area === 'OUTSIDE' ? 'OUTSIDE_SERVICE_AREA' : 'QUALIFIED';\nif (item.service_area === 'EXTENDED' && score < 45) status = 'MANUAL_REVIEW';\nif (!supported.includes(item.service_required)) status = 'MANUAL_REVIEW';\n\nreturn [{ json: { ...item, qualification_score: score, qualification_rating: rating, qualification_reasons: reasons, lead_status: status } }];\n"
+      },
+      "id": "86c7bbb8-7877-49d0-bd31-e8ee11670979",
+      "name": "Calculate Qualification Score",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseCode": "={{ $json.http_status || 200 }}"
+        }
+      },
+      "id": "37cb2668-f453-459c-9baa-da43f0d89ec6",
+      "name": "Return Qualification Result",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        400,
+        200
+      ]
+    }
+  ],
+  "connections": {
+    "Calculate Qualification Score": {
+      "main": [
+        [
+          {
+            "node": "Return Qualification Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "62fc1c75-73af-48e7-9f02-76904faa8d75",
+  "meta": {
+    "instanceId": "localflow-case-study"
+  },
+  "tags": []
+}
