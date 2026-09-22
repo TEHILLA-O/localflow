@@ -2,6 +2,8 @@
 
 > A production-style n8n automation case study that manages the complete lifecycle of a local service enquiry—from lead intake and qualification through booking, reminders, job completion, review requests, error handling and operational reporting.
 
+See [FAILURES.md](./FAILURES.md) for what can go wrong, what broke, how it was fixed, and results.
+
 **Fictional business:** Northampton Home Services Ltd (Northampton, UK) — plumbing, electrical, heating, and property maintenance. This is a portfolio demonstration only, not a real client deployment.
 
 ## Problem
